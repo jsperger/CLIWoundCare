@@ -263,9 +263,6 @@ clti <- clti %>% mutate(ischemia3 = if_else(ischemia == 3, 1, 0),
 ```
 
 
-```{r prevalence_summary}
-clti %>% select(-all_of(names(clti.binary.as.logical))) %>% table1(x = ~. | primaryProcedure, data = .)
-```
 
 The non-numeric variables to be considered based on having prevalence greater than 20% in both intervention groups are
 
@@ -291,54 +288,69 @@ covar.names <- c("ageAtIndexProcedure","GENDER", "InflowDisease", "OutflowDiseas
                  #"wound3", 
                  "COAGULOPATHY", 
                  "SMOKING", "VENOUS_INSUFFICIENCY", "VTE", "CAD", "ischemia3")
-set.seed(1209032)
-# Tried 10-fold and got a funky error
+set.seed(1234)
+# Manually specifying 10-fold CV because the package fails when you set the number of folds above 6 for unknown reasons
+cv.folds <- sample(x = rep(1:10, length.out = nrow(clti)), size = nrow(clti))
 ampsurv.ctmle.fit <- fitCTMLE(clti, "ampMort2yr", covar.names,
                               SL.library = c("SL.glm", "SL.glmnet", "SL.randomForest",
                                              "SL.ksvm", "SL.earth"),
-                              gbound = .05)
+                              gbound = .05,
+                              folds = cv.folds)
+
 mort.ctmle.fit <- fitCTMLE(clti, "mort2yr", covar.names,
                            SL.library = c("SL.glm", "SL.glmnet", "SL.randomForest",
                                           "SL.ksvm", "SL.earth"),
-                           gbound = .05)
+                           gbound = .05,
+                           folds = cv.folds)
 amp.ctmle.fit <- fitCTMLE(clti, "majorAmp2yr", covar.names,
                           SL.library = c("SL.glm", "SL.glmnet", "SL.randomForest",
                                          "SL.ksvm", "SL.earth"),
-                          gbound = .05)
+                          gbound = .05,
+                          folds = cv.folds)
+
 mace.ctmle.fit <- fitCTMLE(clti, "mace2yr", covar.names,
                            SL.library = c("SL.glm", "SL.glmnet", "SL.randomForest",
                                           "SL.ksvm", "SL.earth"),
-                           gbound = .05)
+                           gbound = .05,
+                          folds = cv.folds)
+```
 
+```{r aipw_fitting, cache=TRUE}
+set.seed(808)
 ampsurv.aipw.fit <- fitAIPWE(clti, "ampMort2yr", covar.names, lambda.to.use = "lambda.1se")
-mort.aipw.fit <- fitAIPWE(clti, "mort2yr", covar.names)
-amp.aipw.fit <- fitAIPWE(clti, "majorAmp2yr", covar.names)
-mace.aipw.fit <- fitAIPWE(clti, "mace2yr", covar.names)
+mort.aipw.fit <- fitAIPWE(clti, "mort2yr", covar.names, lambda.to.use = "lambda.1se")
+amp.aipw.fit <- fitAIPWE(clti, "majorAmp2yr", covar.names, lambda.to.use = "lambda.1se")
+mace.aipw.fit <- fitAIPWE(clti, "mace2yr", covar.names,  lambda.to.use = "lambda.1se")
 ```
 
 ```{r aim2_aipw_boot, cache=TRUE}
-ampsurv.aipw.boot <- boot(data = clti, statistic = calcAIPWate, R = 500, 
+#Setting a seed for each chunk that gets cached
+set.seed(909)
+ampsurv.aipw.boot <- boot(data = clti, statistic = calcAIPWate, R = 1000, 
                           outcome.name = "ampMort2yr", 
                           cov.names = covar.names, lambda.to.use = "lambda.1se")  
 ```
 
 
-```{r aim2_mort_boot, cache=TRUE, eval = FALSE}
-mort.aipw.boot <- boot(data = clti, statistic = calcAIPWate, R = 100, 
+```{r aim2_mort_boot, cache=TRUE}
+set.seed(42)
+mort.aipw.boot <- boot(data = clti, statistic = calcAIPWate, R = 500, 
                           outcome.name = "mort2yr", 
                           cov.names = covar.names, lambda.to.use = "lambda.1se")  
 ```
 
 
-```{r aim2_amp_boot, cache=TRUE, eval=FALSE}
-amp.aipw.boot <- boot(data = clti, statistic = calcAIPWate, R = 100, 
+```{r aim2_amp_boot, cache=TRUE}
+set.seed(303)
+amp.aipw.boot <- boot(data = clti, statistic = calcAIPWate, R = 500, 
                           outcome.name = "majorAmp2yr", 
                           cov.names = covar.names, lambda.to.use = "lambda.1se")  
 ```
 
 
-```{r aim2_mace_boot, cache=TRUE, eval = FALSE}
-mace.aipw.boot <- boot(data = clti, statistic = calcAIPWate, R = 100, 
+```{r aim2_mace_boot, cache=TRUE}
+set.seed(24)
+mace.aipw.boot <- boot(data = clti, statistic = calcAIPWate, R = 500, 
                           outcome.name = "mace2yr", 
                           cov.names = covar.names, lambda.to.use = "lambda.1se")  
 ```
@@ -364,15 +376,15 @@ unadj.results <- rbind(c(coef(ampsurv.unadj)[2], ampsurv.sandwich.se[2]),
                        c(coef(mort.unadj)[2], mort.sandwich.se[2]),
                        c(coef(amp.unadj)[2], amp.sandwich.se[2]),
                        c(coef(mace.unadj)[2], mace.sandwich.se[2]))
-aipw.results <- rbind(c(ampsurv.aipw.boot$t0, sd(ampsurv.aipw.boot$t)))
-                      #c(mort.aipw.boot$t0, sd(mort.aipw.boot$t)),
-                      #c(amp.aipw.boot$t0, sd(amp.aipw.boot$t)),
-                      #c(mace.aipw.boot$t0, sd(mace.aipw.boot$t)))
+aipw.results <- rbind(c(ampsurv.aipw.boot$t0, sd(ampsurv.aipw.boot$t)),
+                      c(mort.aipw.boot$t0, sd(mort.aipw.boot$t)),
+                      c(amp.aipw.boot$t0, sd(amp.aipw.boot$t)),
+                      c(mace.aipw.boot$t0, sd(mace.aipw.boot$t)))
 
 results.sum.df <- as.data.frame(rbind(unadj.results, ctmle.ests, aipw.results))
 names(results.sum.df) <- c("RD.hat", "se")
-results.sum.df$Outcome <- rep(c("Amp or Death", "Death", "Amputation", "MACE"), times = 3)[1:9]
-results.sum.df$Method <- c(rep("Unadjusted", 4), rep("CTMLE", 4), rep("AIPW",1))
+results.sum.df$Outcome <- rep(c("Amp or Death", "Death", "Amputation", "MACE"), times = 3)
+results.sum.df$Method <- c(rep("Unadjusted", 4), rep("CTMLE", 4), rep("AIPW",4))
 results.sum.df %<>% arrange(Outcome)
 results.sum.df %<>% mutate(Lower = RD.hat - 1.96*se,
                            Upper = RD.hat + 1.96*se)
