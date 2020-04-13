@@ -46,15 +46,17 @@ run;
 %freq(measure=mace2yr,level=2,group=Revasc);
 
 data proportions;
-	set ampfreesurv2yr (in=a)
-		mort2yr (in=b)
+	set mace2yr (in=d)
 		majoramp2yr (in=c)
-		mace2yr (in=d);
+		mort2yr (in=b)
+		ampfreesurv2yr (in=a);
 
 	if a then Outcome='Two-Year Amputation Free Survival';
 	if c then Outcome='Two-Year Amputation';
 	if b then Outcome='Two-Year Survival';
 	if d then Outcome='Two-Year MACE';
+
+	round=round(_bin_,0.01);
 
 	keep outcome round _bin_ l_bin u_bin;
 run;
@@ -70,9 +72,9 @@ ods rtf file="C:\Users\haleyda\Documents\Spring 2020\BIOS 841\Work\aim1.rtf";
 
 proc sgplot data=proportions;
 	label _bin_ = 'Proportion';
-	scatter y=outcome x=_bin_ / xerrorlower=l_bin xerrorupper=u_bin markerattrs=(symbol=circlefilled) errorbarattrs=(color=viyg);
-	yaxis discreteorder=data offsetmax=0.1 display=(nolabel);
-	xaxis grid values=(0 to 1 by 0.1) valueshint;
+	scatter y=outcome x=_bin_ / xerrorlower=l_bin xerrorupper=u_bin markerattrs=(symbol=circlefilled) errorbarattrs=(color=viyg) datalabel=round datalabelpos=top;
+	yaxis discreteorder=data offsetmax=0.1;* display=(nolabel);
+	xaxis grid values=(0 to 1 by 0.1) valueshint gridattrs=(color=white);
 run;
 
 title 'Wound Management Group';
