@@ -389,23 +389,42 @@ results.sum.df %<>% arrange(Outcome)
 results.sum.df %<>% mutate(Lower = RD.hat - 1.96*se,
                            Upper = RD.hat + 1.96*se)
 
-aim2.plot <- suppressWarnings(ggplot(data = results.sum.df, aes(x = Outcome, y = RD.hat,  ymin = Lower, ymax = Upper))+
+results.sum.df$y <- c(0.9, 1, 1.1, 0.9, 1, 1.1, 0.9, 1, 1.1, 0.9, 1, 1.1)
+
+aim2.plot <- ggplot(data = results.sum.df, aes(x = y, y = RD.hat,  ymin = Lower, ymax = Upper))+
   geom_pointrange(aes(col = Method)) +
+  geom_text(aes(label = round(RD.hat, 2)),
+                x = c(0.8, 1.11, 1.21, 0.8, 1.11, 1.21, 0.8, 1.11, 1.21, 0.8, 1.13, 1.21),# Up and down
+            y = c(0.11, 0.05, 0.01, -0.02, -0.13, -0.1, 0.14, 0.13, 0.09, 0.05, 0.1, 0.05),
+            size = 3) + 
   geom_hline(aes(fill=Group),yintercept =0, linetype=2)+
+    scale_x_continuous(breaks = c(0.9, 1, 1.1, 0.9, 1, 1.1, 0.9, 1, 1.1, 0.9, 1, 1.1),
+                       labels = c("", "Amp or Death", "", "", "Amputation", "", "", "Death", "", "", "MACE", ""),
+                       limits = c(0.5, 1.5)) +
     xlab('Outcome')+ ylab("Risk Difference (95% Confidence Interval)")+
-    geom_errorbar(aes(ymin=Lower, ymax=Upper,col=Method),width=0.5,cex=1)+ 
-    facet_wrap(~Outcome,strip.position="left",nrow=9,scales = "free_y") +
+    geom_errorbar(aes(ymin=Lower, ymax=Upper,col=Method),width=0.025,cex=1)+ 
+    facet_wrap(~Outcome,strip.position="left",nrow=9) +
+    theme_minimal() +
     theme(plot.title=element_text(size=16,face="bold"),
+          # panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.y = element_blank(),
         axis.text.y=element_blank(),
         axis.ticks.y=element_blank(),
         axis.text.x=element_text(face="bold"),
         axis.title=element_text(size=12,face="bold"),
         strip.text.y = element_text(hjust=0,vjust = 1,angle=180,face="bold"))+
-    coord_flip())
+    coord_flip()
 ```
 
 ```{r}
 aim2.plot
+ggsave(plot = aim2.plot, 
+       filename = "aim2plot.png", 
+       device = "png",
+       width = 8.5,
+       height = 6,
+       units = "in")
 ```
 
 #### CTMLE Covariates
