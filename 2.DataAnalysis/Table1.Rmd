@@ -1,0 +1,159 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+source("aim2.R")
+#########################################################
+## Libraries
+#########################################################
+library(ctmle)
+library(DynTxRegime)
+library(glmnet)
+library(tidyverse)
+library(magrittr)
+library(readxl)
+library(lubridate)
+library(here)
+library(table1)
+library(sandwich)
+library(randomForest)
+library(earth)
+library(boot)
+here <- here::here
+
+#########################################################
+## Data
+#########################################################
+
+# You will need to change this to your path
+# So that we don't have to comment out other people's directories, I'm putting some conditional logic
+cur.directory <- here()
+if(str_detect(string = cur.directory, pattern = "jsperger")){
+  data.dir.path <- "/Users/jsperger/Dropbox/Consulting Project/Data/"
+}
+if(str_detect(string = cur.directory, pattern = "Nikki")){
+  data.dir.path <- "/Users/Nikki/Dropbox/Consulting Project/Data/"
+}
+if(str_detect(string = cur.directory, pattern = "haley")){
+  data.dir.path <- "Fix me/Dropbox/Consulting Project/Data/"
+}
+if(str_detect(string = cur.directory, pattern = "michael")){
+  data.dir.path <- "Fix me/Dropbox/Consulting Project/Data/"
+}
+if(exists("data.dir.path") == FALSE | str_detect(data.dir.path, "Fix me") == TRUE) stop("Fix data directory specification")
+
+clti <- read_csv(file = paste0(data.dir.path, "analyticData.csv"),
+                 col_types = cols(
+                   ptNum = col_character(), 
+                   ptSide = col_character(), 
+                   GENDER = col_factor(), 
+                   PATIENT_RACE_1 = col_factor(), 
+                   ETHNICITY = col_factor(), 
+                   ageAtIndexProcedure = col_integer(), 
+                   primaryProcedure = col_factor(), 
+                   CLI_DX_DATE = col_datetime(), 
+                   hemodynamicLaterality = col_factor(), 
+                   InflowDisease = col_integer(), 
+                   OutflowDisease = col_integer(), 
+                   RunoffDisease = col_integer(), 
+                   stentBPG = col_integer(), 
+                   maxRutherfordClass = col_factor(ordered = TRUE), 
+                   ischemia = col_factor(ordered = TRUE), 
+                   woundClass = col_factor(ordered=TRUE), 
+                   CHRONIC_PULM_DISEASE = col_integer(), 
+                   COAGULOPATHY = col_integer(), 
+                   `CONGESTIVE HEART FAILURE-COMPLICATED` = col_integer(), 
+                   CHF = col_integer(), 
+                   `DEMENTIA-NA` = col_integer(), 
+                   `DIABETES-COMPLICATED` = col_integer(), 
+                   DIABETES = col_integer(), 
+                   `DIABETES-UNCOMPLICATED` = col_integer(), 
+                   `HYPERTENSION-COMPLICATED` = col_integer(), 
+                   `HYPERTENSION-UNCOMPLICATED` = col_integer(), 
+                   MI = col_integer(), 
+                   OBESITY = col_integer(), 
+                   `RENAL DISEASE-CKD` = col_integer(), 
+                   `RENAL DISEASE-COMPLICATED` = col_integer(), 
+                   `RENAL DISEASE-ESRD` = col_integer(), 
+                   RENAL_DISEASE = col_integer(), 
+                   SMOKING = col_integer(), 
+                   VENOUS_INSUFFICIENCY = col_integer(), 
+                   WEIGHT_LOSS = col_integer(), 
+                   CEREBROVASCULAR = col_integer(), 
+                   VTE = col_integer(), 
+                   CAD = col_integer(), 
+                   anyAnemia = col_integer(), 
+                   anyHyperlipidemia = col_integer(), 
+                   mort2yr = col_integer(), 
+                   majorAmp2yr = col_integer(), 
+                   mace2yr = col_integer(), 
+                   ampFreeSurv2yr = col_integer() 
+                 ))
+
+# This is for an easier to read table1
+# temporary, can remove later
+clti.binary.as.logical <- read_csv(file = paste0(data.dir.path, "analyticData.csv"),
+                 col_types = cols(
+                   ptNum = col_character(), 
+                   ptSide = col_character(), 
+                   GENDER = col_factor(), 
+                   PATIENT_RACE_1 = col_factor(), 
+                   ETHNICITY = col_factor(), 
+                   ageAtIndexProcedure = col_integer(), 
+                   primaryProcedure = col_factor(), 
+                   CLI_DX_DATE = col_datetime(), 
+                   hemodynamicLaterality = col_factor(), 
+                   InflowDisease = col_logical(), 
+                   OutflowDisease = col_logical(), 
+                   RunoffDisease = col_logical(), 
+                   stentBPG = col_logical(), 
+                   maxRutherfordClass = col_factor(ordered = TRUE), 
+                   ischemia = col_factor(ordered = TRUE), 
+                   woundClass = col_factor(ordered=TRUE), 
+                   CHRONIC_PULM_DISEASE = col_logical(), 
+                   COAGULOPATHY = col_logical(), 
+                   `CONGESTIVE HEART FAILURE-COMPLICATED` = col_logical(), 
+                   CHF = col_logical(), 
+                   `DEMENTIA-NA` = col_logical(), 
+                   `DIABETES-COMPLICATED` = col_logical(), 
+                   DIABETES = col_logical(), 
+                   `DIABETES-UNCOMPLICATED` = col_logical(), 
+                   `HYPERTENSION-COMPLICATED` = col_logical(), 
+                   `HYPERTENSION-UNCOMPLICATED` = col_logical(), 
+                   MI = col_logical(), 
+                   OBESITY = col_logical(), 
+                   `RENAL DISEASE-CKD` = col_logical(), 
+                   `RENAL DISEASE-COMPLICATED` = col_logical(), 
+                   `RENAL DISEASE-ESRD` = col_logical(), 
+                   RENAL_DISEASE = col_logical(), 
+                   SMOKING = col_logical(), 
+                   VENOUS_INSUFFICIENCY = col_logical(), 
+                   WEIGHT_LOSS = col_logical(), 
+                   CEREBROVASCULAR = col_logical(), 
+                   VTE = col_logical(), 
+                   CAD = col_logical(), 
+                   anyAnemia = col_logical(), 
+                   anyHyperlipidemia = col_logical(), 
+                   mort2yr = col_logical(), 
+                   majorAmp2yr = col_logical(), 
+                   mace2yr = col_logical(), 
+                   ampFreeSurv2yr = col_logical() 
+                 ))
+
+
+clti.base <- read.csv(file = paste0(data.dir.path, "analyticData.csv"))
+# Use base R naming scheme for column names. Saves some headaches later with DynTxRegime
+names(clti) <- names(clti.base)
+#clti <- fastDummies::dummy_cols(clti %>% select(-all_of(id.var.names)))
+
+rm(clti.base)
+```
+
+```{r prevalence_summary}
+clti.binary.as.logical %>% select(-all_of(c("ptNum", "ptSide", "CLI_DX_DATE"))) %>% table1(x = ~. | primaryProcedure, data = .)
+```
+
