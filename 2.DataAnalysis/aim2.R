@@ -60,7 +60,8 @@ fitAIPWE <- function(study.data, outcome.name, cov.names, lambda.to.use = "lambd
   main.candidate.mat <- cbind(propensity.candidate.mat, 
                               "primaryTreatmentInt" = study.data$primaryTreatmentInt)
   main.candidate.mat <- model.matrix(~ . + .*primaryTreatmentInt, data.frame(main.candidate.mat))
-  main.cv <- cv.glmnet(x = main.candidate.mat, y = study.data$ampFreeSurv2yr, family="binomial")
+  main.outcome <- study.data %>% pull(!!outcome.name)
+  main.cv <- cv.glmnet(x = main.candidate.mat, y = main.outcome, family="binomial")
   main.coef <- coef(main.cv, s = lambda.to.use) %>% as.matrix()
   
   nonzero.var.names <- (rownames(main.coef)[main.coef != 0])[-1]

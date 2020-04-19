@@ -25,6 +25,7 @@ library(sandwich)
 library(randomForest)
 library(earth)
 library(boot)
+library(stargazer)
 here <- here::here
 
 #########################################################
@@ -334,25 +335,31 @@ ampsurv.aipw.boot <- boot(data = clti, statistic = calcAIPWate, R = 1000,
 
 ```{r aim2_mort_boot, cache=TRUE}
 set.seed(42)
-mort.aipw.boot <- boot(data = clti, statistic = calcAIPWate, R = 500, 
+mort.aipw.boot <- boot(data = clti, statistic = calcAIPWate, R = 1000, 
                           outcome.name = "mort2yr", 
-                          cov.names = covar.names, lambda.to.use = "lambda.1se")  
+                          cov.names = covar.names, lambda.to.use = "lambda.1se",
+                       parallel = "multicore", 
+                       ncpus = 4)  
 ```
 
 
 ```{r aim2_amp_boot, cache=TRUE}
 set.seed(303)
-amp.aipw.boot <- boot(data = clti, statistic = calcAIPWate, R = 500, 
+amp.aipw.boot <- boot(data = clti, statistic = calcAIPWate, R = 1000, 
                           outcome.name = "majorAmp2yr", 
-                          cov.names = covar.names, lambda.to.use = "lambda.1se")  
+                          cov.names = covar.names, lambda.to.use = "lambda.1se",
+                      parallel = "multicore", 
+                       ncpus = 4)  
 ```
 
 
 ```{r aim2_mace_boot, cache=TRUE}
-set.seed(24)
-mace.aipw.boot <- boot(data = clti, statistic = calcAIPWate, R = 500, 
-                          outcome.name = "mace2yr", 
-                          cov.names = covar.names, lambda.to.use = "lambda.1se")  
+set.seed(240)
+mace.aipw.boot <- boot(data = clti, statistic = calcAIPWate, R = 1000, 
+                       outcome.name = "mace2yr", 
+                       cov.names = covar.names, lambda.to.use = "lambda.1se",
+                       parallel = "multicore", 
+                       ncpus = 4)  
 ```
 
 ```{r aim2_plot}
@@ -381,38 +388,55 @@ aipw.results <- rbind(c(ampsurv.aipw.boot$t0, sd(ampsurv.aipw.boot$t)),
                       c(amp.aipw.boot$t0, sd(amp.aipw.boot$t)),
                       c(mace.aipw.boot$t0, sd(mace.aipw.boot$t)))
 
+#  aipw.lower.ci <- c(boot.ci(ampsurv.aipw.boot, type = "basic")$basic[4],
+#                   boot.ci(mort.aipw.boot, type = "basic")$basic[4],
+#                   boot.ci(amp.aipw.boot, type = "basic")$basic[4],
+#                   boot.ci(mace.aipw.boot, type = "basic")$basic[4])
+#aipw.upper.ci <- c(boot.ci(ampsurv.aipw.boot, type = "basic")$basic[5],
+#                   boot.ci(mort.aipw.boot, type = "basic")$basic[5],
+#                   boot.ci(amp.aipw.boot, type = "basic")$basic[5],
+#                   boot.ci(mace.aipw.boot, type = "basic")$basic[5])
+
+
+
 results.sum.df <- as.data.frame(rbind(unadj.results, ctmle.ests, aipw.results))
 names(results.sum.df) <- c("RD.hat", "se")
 results.sum.df$Outcome <- rep(c("Amp or Death", "Death", "Amputation", "MACE"), times = 3)
 results.sum.df$Method <- c(rep("Unadjusted", 4), rep("CTMLE", 4), rep("AIPW",4))
-results.sum.df %<>% arrange(Outcome)
 results.sum.df %<>% mutate(Lower = RD.hat - 1.96*se,
                            Upper = RD.hat + 1.96*se)
+#results.sum.df$Lower[9:12] <- aipw.lower.ci
+#results.sum.df$Upper[9:12] <- aipw.upper.ci
+
+results.sum.df %<>% arrange(Outcome)
+print(results.sum.df)
 
 results.sum.df$y <- c(0.9, 1, 1.1, 0.9, 1, 1.1, 0.9, 1, 1.1, 0.9, 1, 1.1)
 
 aim2.plot <- ggplot(data = results.sum.df, aes(x = y, y = RD.hat,  ymin = Lower, ymax = Upper))+
   geom_pointrange(aes(col = Method)) +
-  geom_text(aes(label = round(RD.hat, 2)),
-                x = c(0.8, 1.11, 1.21, 0.8, 1.11, 1.21, 0.8, 1.11, 1.21, 0.8, 1.13, 1.21),# Up and down
-            y = c(0.11, 0.05, 0.01, -0.02, -0.13, -0.1, 0.14, 0.13, 0.09, 0.05, 0.1, 0.05),
-            size = 3) + 
+ 
   geom_hline(aes(fill=Group),yintercept =0, linetype=2)+
     scale_x_continuous(breaks = c(0.9, 1, 1.1, 0.9, 1, 1.1, 0.9, 1, 1.1, 0.9, 1, 1.1),
                        labels = c("", "Amp or Death", "", "", "Amputation", "", "", "Death", "", "", "MACE", ""),
                        limits = c(0.5, 1.5)) +
     xlab('Outcome')+ ylab("Risk Difference (95% Confidence Interval)")+
     geom_errorbar(aes(ymin=Lower, ymax=Upper,col=Method),width=0.025,cex=1)+ 
+   geom_text(aes(label = round(RD.hat, 2)),
+                x = c(0.8, 1.11, 1.21, 0.8, 1.11, 1.21, 0.8, 1.11, 1.21, 0.8, 1.13, 1.21),# Up and down
+            y = c(0.11, 0.05, 0.01, -0.02, -0.13, -0.02, 0.14, 0.12, 0.15, 0.05, 0.1, 0.05),
+            size = 3.5) + 
     facet_wrap(~Outcome,strip.position="left",nrow=9) +
     theme_minimal() +
     theme(plot.title=element_text(size=16,face="bold"),
+          legend.position = c(.877, 0.665),
           # panel.grid.major.x = element_blank(),
           panel.grid.major.y = element_blank(),
           panel.grid.minor.y = element_blank(),
         axis.text.y=element_blank(),
         axis.ticks.y=element_blank(),
         axis.text.x=element_text(face="bold"),
-        axis.title=element_text(size=12,face="bold"),
+        axis.title=element_text(size=14,face="bold"),
         strip.text.y = element_text(hjust=0,vjust = 1,angle=180,face="bold"))+
     coord_flip()
 ```
@@ -427,6 +451,55 @@ ggsave(plot = aim2.plot,
        units = "in")
 ```
 
+### AIPWE Model Coefficients
+
+```{r aipw_mod_coef}
+prop.mod <- propen(ampsurv.aipw.fit)
+
+ampsurv.outcome.mod <- outcome(ampsurv.aipw.fit)
+mort.outcome.mod <- outcome(mort.aipw.fit)
+amp.outcome.mod <- outcome(amp.aipw.fit)
+mace.outcome.mod <- outcome(mace.aipw.fit)
+
+names(ampsurv.outcome.mod$Combined$coefficients)[11] <- "primaryTreatmentInt:COAGULOPATHY"
+mort.outcome.mod$Combined$coefficients
+amp.outcome.mod$Combined$coefficients
+mace.outcome.mod$Combined$coefficients
+
+```
+
+```{r, results='asis'}
+prop.mod$formula <- as.formula("primaryTreatmentInt ~ OutflowDisease + woundAsInt")
+stargazer(prop.mod, type = "html", title = "Propensity Score Model",
+          dep.var.caption  = "Wound Management",
+          dep.var.labels.include = FALSE,
+          covariate.labels = c("Intercept", "Outflow Disease", "Wound Score (integer-coded)"),
+          ci=TRUE, ci.level = .95, 
+          digits = 2,
+          star.cutoffs = NA,
+          omit.table.layout = "sn",
+          intercept.bottom = FALSE)
+```
+
+```{r, results='asis'}
+stargazer(ampsurv.outcome.mod, mort.outcome.mod, amp.outcome.mod, mace.outcome.mod,
+          title = "AIPW Outcome Model Estimated Coefficients",
+          type = "html", 
+          dep.var.caption  = "",
+          dep.var.labels.include = FALSE,
+          model.numbers = FALSE,
+          column.labels = c("Amp or Death", "Death", "Amputation", "MACE"),
+           covariate.labels = c("Intercept", "Inflow Disease", "Cerebrovascular",
+                                "CHF (Any)", "Renal Disease (Any)", "Rutherford Score >=5",
+                                 "Wound Score (integer-coded)", "Coagulopathy",
+                                "Venous Insufficiency", "Myocardial Infarction",
+                                "Treatment: Wound Management",
+                                "Wound Management * Coagulopathy"),
+          ci=TRUE, ci.level = .95, 
+          digits = 2,
+          star.cutoffs = NA,omit.table.layout = "sn",
+          intercept.bottom = FALSE)
+```
 #### CTMLE Covariates
 
 ```{r}
