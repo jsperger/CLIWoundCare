@@ -80,6 +80,7 @@ fitAIPWE <- function(study.data, outcome.name, cov.names, lambda.to.use = "lambd
   #print(main.mod.string)
   #print(cont.mod.string)
   
+
   if(cont.mod.string == "~ 1"){
     # This is kind of goofy but DynTxRegime doesn't seem to like it if Contmod is intercept only and throws an error
     # Solution: take the first nonzero term(s)
@@ -100,6 +101,7 @@ fitAIPWE <- function(study.data, outcome.name, cov.names, lambda.to.use = "lambd
       }
     }
   }
+  
   cont.mod.formula <- formula(cont.mod.string)
   
   mean.mod <- buildModelObj(model = main.mod.formula, 
@@ -149,6 +151,22 @@ calcAIPWate <- function(in.data, outcome.name, cov.names, ...){
   
   ate <- mean(pred.prob.wm - pred.prob.revasc)
   return(ate)
+}
+
+plotCounterfacTrtDist <- function(aipw.fit){
+  aipw.outcome.mod <- outcome(aipw.fit)$Combined
+  # Make counterfactual datasets
+  counterfac.data.all.wm <- in.data %>% mutate(primaryTreatmentInt = 1) %>% as.data.frame()
+  counterfac.data.all.revasc <- in.data %>% mutate(primaryTreatmentInt = 0) %>% as.data.frame()
+  
+  #Get predicted outcomes and get predicted probability
+  pred.prob.wm <- boot::inv.logit(predict(aipw.outcome.mod, newdata = counterfac.data.all.wm))
+  pred.prob.revasc <- boot::inv.logit(predict(aipw.outcome.mod, newdata = counterfac.data.all.revasc))
+  
+  trt.dif <- pred.prob.wm - pred.prob.revasc
+  ggplot(data = tibble(x = trt.dif),
+         aes(x = x)) + geom_histogram() +
+    xlab("Treatment effect (predicted probability)")
 }
 
 aipwBootWrapper <- function(in.data, n.boot, outcome.name, cov.names, ...){

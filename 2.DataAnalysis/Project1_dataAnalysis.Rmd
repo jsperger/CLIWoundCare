@@ -261,6 +261,9 @@ clti <- clti %>% mutate(ischemia3 = if_else(ischemia == 3, 1, 0),
                 maxRutherford4 = if_else(maxRutherfordClass == 4, 1, 0),
                 maxRutherford5or6 = if_else(maxRutherford4 == 0, 1, 0),
                 maxRutherfordAsInt = as.integer(maxRutherfordClass))
+# This was getting reverse coded by as.integer
+clti$woundAsInt <- abs(clti$woundAsInt-4)
+#table(clti$woundClass, clti$woundAsInt)
 ```
 
 
@@ -317,7 +320,7 @@ mace.ctmle.fit <- fitCTMLE(clti, "mace2yr", covar.names,
 ```
 
 ```{r aipw_fitting, cache=TRUE}
-set.seed(808)
+set.seed(809)
 ampsurv.aipw.fit <- fitAIPWE(clti, "ampMort2yr", covar.names, lambda.to.use = "lambda.1se")
 mort.aipw.fit <- fitAIPWE(clti, "mort2yr", covar.names, lambda.to.use = "lambda.1se")
 amp.aipw.fit <- fitAIPWE(clti, "majorAmp2yr", covar.names, lambda.to.use = "lambda.1se")
@@ -454,6 +457,7 @@ ggsave(plot = aim2.plot,
 ### AIPWE Model Coefficients
 
 ```{r aipw_mod_coef}
+
 prop.mod <- propen(ampsurv.aipw.fit)
 
 ampsurv.outcome.mod <- outcome(ampsurv.aipw.fit)
@@ -499,6 +503,10 @@ stargazer(ampsurv.outcome.mod, mort.outcome.mod, amp.outcome.mod, mace.outcome.m
           digits = 2,
           star.cutoffs = NA,omit.table.layout = "sn",
           intercept.bottom = FALSE)
+```
+
+```{r aipw}
+#qplot(counterfac.dif, xlab = "Counterfactual Difference (percentage points)", main = "Histogram of Predicted Probability of Death or Amputation")
 ```
 #### CTMLE Covariates
 
