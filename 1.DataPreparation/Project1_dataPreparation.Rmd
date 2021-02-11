@@ -105,10 +105,23 @@ mort2yr <- left_join(primaryProc, mutate(mort,
 
 ```
 
+### 1 year mortality
+
+Created ad hoc for the manuscript (per e-mail from Kate McGinigle on 3 February 2021)
+
+```{r}
+mort1yr <- left_join(primaryProc, mutate(mort, 
+                              ptNum = as.character(ptNum), 
+                              ptSide = paste0(ptNum, hemodynamicLaterality)), 
+          by = c("ptNum", "ptSide")) %>%
+  select(ptSide, ptNum, deathDate, timeToDeathFromStudyStart) %>%
+  mutate(mort1yr = if_else(!is.na(timeToDeathFromStudyStart) & timeToDeathFromStudyStart <= 365, 1, 0))
+```
+
 ## Create the amputation outcome
 
 ```{r}
-amp2yr <- procLat %>% mutate(ptSide = paste0(ptNum, laterality)) %>% 
+amp2yr_temp <- procLat %>% mutate(ptSide = paste0(ptNum, laterality)) %>% 
   filter(ptSide %in% grid$ptSide) %>%  # keep unilat patients in grid2
   filter(procGroup != "other") %>% # procedures labeled as "other" do not apply to us
   select(ptNum, ptSide, CLI_DX_DATE, PROCEDURE_DATE, DAYS_FROM_CLI_DX, procGroup) %>% # Select the columns that matter to us
@@ -130,13 +143,26 @@ amp2yr <- procLat %>% mutate(ptSide = paste0(ptNum, laterality)) %>%
   fill(indexProcedureDatePlus10,.direction = "down") %>%
   mutate(inIndexPeriodFlag = if_else(PROCEDURE_DATE <= indexProcedureDatePlus30, 1, 0)) %>%
   filter(procGroup == "Major amputation") %>%
-  mutate(timeToAmputation = PROCEDURE_DATE - indexProcedureDate) %>%
-  filter(timeToAmputation <= years(2)) %>%
+  mutate(timeToAmputation = PROCEDURE_DATE - indexProcedureDate)
+amp2yr <- amp2yr_temp %>% filter(timeToAmputation <= years(2)) %>%
   select(ptNum, ptSide) %>%
   mutate(majorAmp2yr = 1) %>%
   distinct()
 
 ```
+
+### 1 year amputation
+
+Ad hoc request for the manuscript (e-mail from Kate McGinigle on 3 February 2021 to Nikki and John)
+
+```{r}
+amp1yr <- amp2yr_temp %>% filter(timeToAmputation <= years(1)) %>%
+  select(ptNum, ptSide) %>%
+  mutate(majorAmp1yr = 1) %>%
+  distinct()
+```
+
+
 
 ## Create the MACE outcomes
 ```{r}
@@ -212,9 +238,12 @@ demog <- ptFile %>% left_join(ptsAndIndexProcedures, by = "ptNum") %>%
 ## Merge the outcomes, comorbidities, procedures, and demographics
 ```{r}
 preAnalyticData <- left_join(primaryProc, mort2yr, by = c("ptNum", "ptSide")) %>%
+  left_join(select(mort1yr, ptSide, ptNum, mort1yr), by = c("ptNum", "ptSide")) %>% # Added 11 Feb 2021
   left_join(amp2yr, by = c("ptNum", "ptSide")) %>%
+  left_join(amp1yr, by = c("ptNum", "ptSide")) %>% # Added 11 Feb 2021
   left_join(mutate(grid, ptNum = as.character(ptNum)), by = c("ptNum", "ptSide")) %>%
   replace_na(list(majorAmp2yr = 0, 
+                  majorAmp1yr = 0, # Added 11 Feb 2021
                   RunoffDisease = 0,
                   InflowDisease = 0,
                   OutflowDisease = 0)) %>%
@@ -244,7 +273,8 @@ preAnalyticData2 <- preAnalyticData %>% select(ptNum, ptSide, # Patient Limb ide
                            woundClass, infectionClass,
                            ANEMIA:CAD, # comorbidities
                            mort2yr, majorAmp2yr,
-                           mace2yr)  
+                           mace2yr,
+                           mort1yr, majorAmp1yr)  
 
 # Combine the rare comorbidities (e.g anemia)
 preAnalyticData2 %>% ungroup() %>% summarise_at(vars(InflowDisease:CAD), sum)
@@ -261,17 +291,17 @@ analyticData <- preAnalyticData2 %>%
   select(-c(ANEMIA, `DEFICIENCY ANEMIA-NA`, `HYPERLIPIDEMIA-COMPLICATED`, `HYPERLIPIDEMIA-NA`,
             infectionClass, `CEREBROVASCULAR DISEASE-COMPLICATED`,
             `WOUND-COMPLICATED`, `WOUND-EXTREMITY`, `WOUND`)) %>%
-  select(ptNum:CAD, anyAnemia, anyHyperlipidemia, mort2yr, majorAmp2yr, mace2yr) %>%
+  select(ptNum:CAD, anyAnemia, anyHyperlipidemia, mort2yr, majorAmp2yr, mace2yr, mort1yr, majorAmp1yr) %>%
   mutate(ampFreeSurv2yr = if_else(mort2yr == 0 & majorAmp2yr == 0 , 1, 0)) %>%
   filter(!is.na(CAD)) 
 
 
-
   
-# readr::write_csv(x = analyticData, path = "analyticData.csv")
+# readr::write_csv(x = analyticData, file = "analyticData.csv")
   
   
 ```
+
       
 ```{r, eval = FALSE, include = FALSE}
 # Curiosity killed the cat

@@ -1,0 +1,65 @@
+---
+title: "Ad hoc calculations for manuscript"
+output: html_notebook
+---
+
+# Task 1
+
+On 3 February 2021, Kate sent an e-mail with the draft manuscript and requested a few additional number and an updated to a plot.
+
+<br>
+<br>
+
+## Limb salvage and survival 
+
+Some of these measures required were added to the preprocessing document
+
+```{r}
+library(tidyverse)
+
+analyticData <- readr::read_csv("/Users/Nikki/Dropbox/Consulting_github/CLIWoundCare/1.DataPreparation/analyticData.csv")
+
+analyticData %>% group_by(primaryProcedure) %>%
+  summarise(1-sum(majorAmp1yr)/n(), 1-sum(majorAmp2yr)/n())
+
+analyticData %>% 
+  summarise(1-sum(majorAmp1yr)/n(), 1-sum(majorAmp2yr)/n())
+
+analyticData %>%
+  summarise(1-sum(mort1yr)/n(), 1-sum(mort2yr)/n())
+```
+
+## New Figure 1
+
+```{r}
+# Data comes from the report
+outcome <- c("Two-year Amputation-Free Survival",
+             "Two-year Survival",
+             "Two-year Amputation",
+             "Two-year MACE")
+pointEstimate <- c(51, 65, 19, 17)
+LB <- c(40, 54, 10, 8)
+UB <- c(63, 76, 29, 25)
+
+pData <- data.frame(outcome, pointEstimate, LB, UB) %>%
+  mutate(label = paste0(pointEstimate, "% [", LB, "%, ", UB, "%]"))
+
+fig1 <- pData %>%
+  ggplot(aes(x = pointEstimate, y = outcome)) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = LB, xmax = UB),
+                 height = 0) +
+  geom_text(aes(label = label), size = 2.3, vjust = -1.5) +
+  scale_y_discrete(breaks = rev(outcome), 
+                   labels = rev(outcome), 
+                   limits = rev(outcome)) +
+  scale_x_continuous(breaks = seq(from = 10, to = 70, by = 10),
+                     labels = paste0(seq(from = 10, to = 70, by = 10), "%")) +
+  ylab("") +
+  xlab("Percent") +
+  theme_minimal() +
+  theme(panel.grid.major.y =  element_blank(),
+        panel.grid.minor.x = element_blank()) 
+
+ggsave(fig1, filename = "fig1.png", device = "png", width = 6, height = 3)
+```
