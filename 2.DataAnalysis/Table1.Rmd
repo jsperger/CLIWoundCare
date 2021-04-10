@@ -35,8 +35,8 @@ cur.directory <- here()
 if(str_detect(string = cur.directory, pattern = "jsperger")){
   data.dir.path <- "/Users/jsperger/Dropbox/Consulting Project/Data/"
 }
-if(str_detect(string = cur.directory, pattern = "Nikki")){
-  data.dir.path <- "/Users/Nikki/Dropbox/Consulting Project/Data/"
+if(str_detect(string = cur.directory, pattern = "nikkifreeman")){
+  data.dir.path <- "/Users/nikkifreeman/Dropbox/Consulting Project/Data/"
 }
 if(str_detect(string = cur.directory, pattern = "haley")){
   data.dir.path <- "Fix me/Dropbox/Consulting Project/Data/"
@@ -66,11 +66,13 @@ clti <- read_csv(file = paste0(data.dir.path, "analyticData.csv"),
                    woundClass = col_factor(ordered=TRUE), 
                    CHRONIC_PULM_DISEASE = col_integer(), 
                    COAGULOPATHY = col_integer(), 
-                   `CONGESTIVE HEART FAILURE-COMPLICATED` = col_integer(), 
-                   CHF = col_integer(), 
+                   # `CONGESTIVE HEART FAILURE-COMPLICATED` = col_integer(), 
+                   # CHF = col_integer(), 
+                   any_chf = col_integer(), 
                    `DEMENTIA-NA` = col_integer(), 
-                   `DIABETES-COMPLICATED` = col_integer(), 
-                   DIABETES = col_integer(), 
+                   # `DIABETES-COMPLICATED` = col_integer(), 
+                   # DIABETES = col_integer(), 
+                   diabetes = col_integer(), 
                    `DIABETES-UNCOMPLICATED` = col_integer(), 
                    `HYPERTENSION-COMPLICATED` = col_integer(), 
                    `HYPERTENSION-UNCOMPLICATED` = col_integer(), 
@@ -116,12 +118,14 @@ clti.binary.as.logical <- read_csv(file = paste0(data.dir.path, "analyticData.cs
                    woundClass = col_factor(ordered=TRUE), 
                    CHRONIC_PULM_DISEASE = col_logical(), 
                    COAGULOPATHY = col_logical(), 
-                   `CONGESTIVE HEART FAILURE-COMPLICATED` = col_logical(), 
-                   CHF = col_logical(), 
+                   # `CONGESTIVE HEART FAILURE-COMPLICATED` = col_logical(), 
+                   # CHF = col_logical(), 
+                   anyCHF = col_logical(),
                    `DEMENTIA-NA` = col_logical(), 
                    `DIABETES-COMPLICATED` = col_logical(), 
-                   DIABETES = col_logical(), 
-                   `DIABETES-UNCOMPLICATED` = col_logical(), 
+                   # DIABETES = col_logical(), 
+                   # `DIABETES-UNCOMPLICATED` = col_logical(), 
+                   diabetes = col_logical(),
                    `HYPERTENSION-COMPLICATED` = col_logical(), 
                    `HYPERTENSION-UNCOMPLICATED` = col_logical(), 
                    MI = col_logical(), 

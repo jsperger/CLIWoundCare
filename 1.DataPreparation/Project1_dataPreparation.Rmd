@@ -13,11 +13,11 @@ library(lubridate)
 
 Load the data
 ```{r, message = FALSE}
-grid <- readxl::read_xlsx("/Users/Nikki/Dropbox/Consulting project/Data/grid2NoMRN.xlsx")
-mort <- readxl::read_xlsx("/Users/Nikki/Dropbox/Consulting project/Data/mortNoMRN.xlsx")
-proc <- readxl::read_xlsx("/Users/Nikki/Dropbox/Consulting project/Data/procGroupedNoMRN.xlsx")
-procLat <- readxl::read_xlsx("/Users/Nikki/Dropbox/Consulting project/Data/procLatNoMRN.xlsx")
-ptFile <- readxl::read_xlsx("/Users/Nikki/Dropbox/Consulting project/Data/masterPtFileNoMRN.xlsx")
+grid <- readxl::read_xlsx("/Users/nikkifreeman/Dropbox/Consulting project/Data/grid2NoMRN.xlsx")
+mort <- readxl::read_xlsx("/Users/nikkifreeman/Dropbox/Consulting project/Data/mortNoMRN.xlsx")
+proc <- readxl::read_xlsx("/Users/nikkifreeman/Dropbox/Consulting project/Data/procGroupedNoMRN.xlsx")
+procLat <- readxl::read_xlsx("/Users/nikkifreeman/Dropbox/Consulting project/Data/procLatNoMRN.xlsx")
+ptFile <- readxl::read_xlsx("/Users/nikkifreeman/Dropbox/Consulting project/Data/masterPtFileNoMRN.xlsx")
 ```
 
 
@@ -296,8 +296,21 @@ analyticData <- preAnalyticData2 %>%
   filter(!is.na(CAD)) 
 
 
+# Combining CHF and Diabeters per e-mail from Kate to Nikki on 5 April 2021 + 
+# Combining categories to match the C-TMLE analysis
+analyticData <- analyticData %>%
+  # CHF and complicated CHF combined into anyCHF
+  mutate(anyCHF = if_else(CHF == 1 | `CONGESTIVE HEART FAILURE-COMPLICATED` == 1, 1, 0)) %>%
+  # Diabetes and uncomplicated diabetes combined into diabetes; any diabetes
+  mutate(diabetes = if_else(DIABETES == 1 | `DIABETES-UNCOMPLICATED` == 1, 1, 0)) %>%
+  mutate(anyDiabetes = if_else(`DIABETES-COMPLICATED` == 1 | diabetes == 1, 1, 0 )) %>%
+  # hypertension
+  mutate(anyHypertension = if_else(`HYPERTENSION-COMPLICATED` == 1 | `HYPERTENSION-UNCOMPLICATED` == 1, 1, 0)) %>%
+  # renal
+  mutate(anyRenal = if_else(`RENAL DISEASE-CKD` == 1 | `RENAL DISEASE-COMPLICATED` == 1 | `RENAL DISEASE-ESRD` == 1 | RENAL_DISEASE == 1, 1, 0))
   
-# readr::write_csv(x = analyticData, file = "analyticData.csv")
+# readr::write_csv(x = analyticData, file = "../../../Consulting Project/Data/analyticData.csv")
+
   
   
 ```
@@ -305,7 +318,7 @@ analyticData <- preAnalyticData2 %>%
       
 ```{r, eval = FALSE, include = FALSE}
 # Curiosity killed the cat
-analyticData <- read_csv("/Users/Nikki/Dropbox/Consulting Project/Data/analyticData.csv") %>%
+analyticData <- read_csv("/Users/nikkifreeman/Dropbox/Consulting Project/Data/analyticData.csv") %>%
   mutate(ptNum = as.character(ptNum),
          CLI_DX_DATE = ymd(CLI_DX_DATE))
 
