@@ -1,0 +1,190 @@
+---
+title: "Ad hoc bits for revision"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+```{r "set up", include = FALSE}
+# Chunk options
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+
+# Packages
+library(tidyverse)
+```
+
+**Load the data**
+
+Load the `analyticData.csv` which was the basis for the analysis. 
+
+```{r "load analyticData"}
+analyticData <- readr::read_csv("../1.DataPreparation/analyticData.csv")
+```
+
+<br>
+
+**Reviewer 1**
+
+*9.  Where are the non-invasive hemodynamic comparisons in table 1?  Without listing these for each group and meaningful comparisons of toe pressures etc then this is incomplete
+
+Response: WIfI ischemia grades are already provided in table 1. Additionally, we have now provided the mean and median toe pressures for each group. 
+
+To get the toe pressures, we need to map back the analytic data to the original data MRNs and then look at the master patient file with the toe pressures.
+
+```{r "mean and median toe pressures"}
+# ptNum to MRN crosswalk
+mrnCrosswalk <- readxl::read_xlsx("/Volumes/McGinigle_Kate_IRB18-1153/Analysis/Data_for_Siyeon/MRN_to_PtNum_crosswalk.xlsx")
+# Toe pressures are in the master patient file from the staging project
+masterPtData <- readxl::read_xlsx("/Volumes/McGinigle_Kate_IRB18-1153/_IRB18-1153_PROJECT_DATA/IRB18-1153_MASTER_PATIENT_WITH_ATA_PTA_TOE_PRESSURE.xlsx",skip = 3)
+
+# Collect what we need for the toe pressures
+toePressures <- analyticData %>%
+  select(ptNum, primaryProcedure, hemodynamicLaterality) %>%
+  # Crosswalk ptNum to MRN
+  left_join(mrnCrosswalk, by = "ptNum") %>%
+  # Merge analytic data with master patient file on MRN, keep only toe pressures
+  left_join(masterPtData %>%
+              select(CURRENT_MRN, 
+                     RT_GREAT_TOE_PRESSURE, 
+                     LT_GREAT_TOE_PRESSURE), by = "CURRENT_MRN") %>%
+  mutate(toePressure = if_else(hemodynamicLaterality == "Right", RT_GREAT_TOE_PRESSURE, LT_GREAT_TOE_PRESSURE))
+
+# Toe pressures by group
+toePressures %>%
+  mutate(toePressure = as.numeric(toePressure)) %>%
+  group_by(primaryProcedure) %>%
+  summarise(meanTP = mean(toePressure, na.rm = TRUE),
+            medianTP = median(toePressure, na.rm = TRUE),
+            sdTP = sd(toePressure, na.rm = TRUE),
+            minTP = min(toePressure, na.rm = TRUE),
+            maxTP = max(toePressure, na.rm = TRUE),
+            missingTP = sum(is.na(toePressure)),
+            n = n())
+
+# Toe pressures for overall cohort
+toePressures %>%
+  mutate(toePressure = as.numeric(toePressure)) %>%
+  summarise(meanTP = mean(toePressure, na.rm = TRUE),
+            medianTP = median(toePressure, na.rm = TRUE),
+            sdTP = sd(toePressure, na.rm = TRUE),
+            minTP = min(toePressure, na.rm = TRUE),
+            maxTP = max(toePressure, na.rm = TRUE),
+            missingTP = sum(is.na(toePressure)),
+            n = n())
+```
+<br>
+
+**Reviewer 3**
+
+Standard considerations such as anatomic location and extent of atherosclerosis, body habitus, and availability of adequate autogenous vein conduit contributed to the shared decision making for type of revascularization. Endovascular revascularizations included approaches from contralateral femoral artery, ipsilateral femoral artery, and/or ipsilateral pedal arteries and interventions included angioplasty, stenting, and atherectomy as indicated. Open surgical cases preferentially used single segment saphenous vein conduit, but also included spliced vein conduits, and in rare circumstances non-autogenous conduits.
+
+Response: Additionally, in the results we added the breakdown of number of revascularizations that were open versus endo. 
+
+To get the number of endos vs opens, we crosswalk the analytic data ptNums to the MRNs. Then we use the procedure csv to find out the procedure.
+
+```{r "Number endo vs open"}
+procedures <- readxl::read_xlsx("/Volumes/McGinigle_Kate_IRB18-1153/Analysis/5.Outcome_creation/procedure.xlsx")
+
+ptsAndProcedures <- analyticData %>%
+  select(ptNum, primaryProcedure, hemodynamicLaterality) %>%
+   # Crosswalk ptNum to MRN
+  left_join(mrnCrosswalk, by = "ptNum") %>%
+  # Create ptSide
+  mutate(ptSide = paste0(CURRENT_MRN, hemodynamicLaterality)) %>%
+  left_join(procedures, by = "ptSide") %>%
+  mutate(procedure = if_else(Endovascular == 1 & Open == 1, "both", "?"),
+         procedure = if_else(Endovascular == 1 & Open == 0, "Endo", procedure),
+         procedure = if_else(Endovascular == 0 & Open == 1, "Open", procedure),
+         procedure = if_else(procedure == "?", "WM", procedure)) 
+
+ptsAndProcedures %>% count(procedure)
+
+# For patients that had both endo and open, find out which came first
+hadEndoAndOpenMRNs <- ptsAndProcedures %>% 
+  filter(procedure == "both") %>%
+  select(CURRENT_MRN)
+
+allProcedures <- readxl::read_xlsx("/Volumes/McGinigle_Kate_IRB18-1153/_IRB18-1153_PROJECT_DATA/IRB18-1153_PROCEDURES.xlsx", skip = 3)
+source("/Volumes/McGinigle_Kate_IRB18-1153/Analysis/scripts/groupProcedures.R")
+
+multProcPts <- allProcedures %>% 
+  # Filter to only the patients we are interested in
+  filter(CURRENT_MRN %in% hadEndoAndOpenMRNs$CURRENT_MRN) %>%
+  # Only keep procedures on or after dx
+  mutate(DAYS_FROM_CLI_DX = as.numeric(DAYS_FROM_CLI_DX)) %>%
+  filter(DAYS_FROM_CLI_DX >= 0) %>%
+  # group the procedures
+  groupProcedures() %>%
+  # Keep only the ends and opens
+  filter(procGroup %in% c("Endovascular", "Open")) %>%
+  # pick the earliest of endo or open
+  mutate(PROCEDURE_DATE = lubridate::as_date(PROCEDURE_DATE)) %>%
+  group_by(CURRENT_MRN) %>%
+  filter(PROCEDURE_DATE == min(PROCEDURE_DATE))  %>%
+  select(CURRENT_MRN, procGroup) %>%
+  distinct() %>%
+  group_by(CURRENT_MRN) %>%
+  add_count()
+
+# Per e-mail from Kate, all of these can be considered as open
+allProcedures %>%
+  filter(CURRENT_MRN %in% multProcPts$CURRENT_MRN[multProcPts$n > 1]) %>%
+  # Only keep procedures on or after dx
+  mutate(DAYS_FROM_CLI_DX = as.numeric(DAYS_FROM_CLI_DX)) %>%
+  filter(DAYS_FROM_CLI_DX >= 0) %>%
+  # group the procedures
+  groupProcedures() %>%
+  group_by(CURRENT_MRN) %>%
+  filter(PROCEDURE_DATE == min(PROCEDURE_DATE)) 
+
+  
+```
+
+
+-	Also, cross over rates and at what time?
+
+Response: The number of patients who were initially treated with wound care alone, who went on to require revascularization for non-healing wounds was XX. The median time to delayed revascularization was XX.
+
+```{r "crossovers from wm to revasc"}
+
+wmPts <- analyticData %>% filter(primaryProcedure == "WM") %>%
+  left_join(mrnCrosswalk, by = "ptNum")
+
+# Patients that initially had wm and eventually had a revasc
+wmToRevasc <- wmPts %>% select(ptNum, ptSide, hemodynamicLaterality, CURRENT_MRN) %>%
+  left_join(allProcedures, by = "CURRENT_MRN") %>%
+  mutate(DAYS_FROM_CLI_DX = as.numeric(DAYS_FROM_CLI_DX)) %>%
+  filter(DAYS_FROM_CLI_DX >= 0) %>%
+  groupProcedures() %>%
+  group_by(CURRENT_MRN) %>%
+  count(procGroup) %>%
+  pivot_wider(names_from = procGroup, values_from = n) %>%
+  select(-c(other, Fasciotomy)) %>%
+  replace_na(list(Debridement = 0,
+                  `Minor amputation` = 0,
+                  Endovascular = 0, 
+                  `Major amputation` = 0,
+                  `Open` = 0)) %>%
+  mutate(hadRevasc = if_else(Endovascular + Open > 0, 1, 0)) %>%
+  ungroup() %>%
+  filter(hadRevasc == 1)
+  
+allProcedures %>%
+  filter(CURRENT_MRN %in% wmToRevasc$CURRENT_MRN) %>%
+  mutate(DAYS_FROM_CLI_DX = as.numeric(DAYS_FROM_CLI_DX)) %>%
+  filter(DAYS_FROM_CLI_DX >= 0) %>%
+  groupProcedures() %>%
+  filter(procGroup %in% c("Endovascular", "Open")) %>%
+  mutate(PROCEDURE_DATE = lubridate::as_date(PROCEDURE_DATE)) %>%
+  group_by(CURRENT_MRN) %>%
+  filter(PROCEDURE_DATE == min(PROCEDURE_DATE)) %>%
+  select(CURRENT_MRN, PROCEDURE_DATE, DAYS_FROM_CLI_DX, procGroup) %>%
+  distinct() %>%
+  ungroup() %>%
+  summarise(median(DAYS_FROM_CLI_DX))
+```
+
+
+
+
