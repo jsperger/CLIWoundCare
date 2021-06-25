@@ -31,35 +31,84 @@ analyticData %>%
 
 ## New Figure 1
 
-```{r}
-# Data comes from the report
-outcome <- c("Two-year Amputation-Free Survival",
-             "Two-year Survival",
-             "Two-year Amputation",
-             "Two-year MACE")
-pointEstimate <- c(51, 65, 19, 17)
-LB <- c(40, 54, 10, 8)
-UB <- c(63, 76, 29, 25)
+Revised on 25 June 2021 for revision
 
-pData <- data.frame(outcome, pointEstimate, LB, UB) %>%
-  mutate(label = paste0(pointEstimate, "% [", LB, "%, ", UB, "%]"))
+```{r}
+library(DescTools)
+
+getCIs <- function(df, measure){
+  x = df %>% dplyr::select(!!measure) %>%
+    unlist()
+  n = length(x)
+  
+  DescTools::BinomCI(x = sum(x), n = n, method = "wald")
+
+}
+
+wmGroup <- analyticData %>% filter(primaryProcedure == "WM") %>%
+  mutate(mort2yr = if_else(mort2yr == 1, 0, 1))
+revascGroup <- analyticData %>% filter(primaryProcedure != "WM") %>%
+  mutate(mort2yr = if_else(mort2yr == 1, 0, 1))
+
+measures <- c("ampFreeSurv2yr", "mort2yr", "majorAmp2yr", "mace2yr")
+
+wmCIs <- reduce(map(map(measures, getCIs, df = wmGroup), data.frame), bind_rows) %>%
+  mutate(measure = measures, .before = "est") %>%
+  mutate(group = "WM", .before = "measure")
+revascCIs <- reduce(map(map(measures, getCIs, df = revascGroup), data.frame), bind_rows) %>%
+  mutate(measure = measures, .before = "est") %>%
+  mutate(group = "revasc", .before = "measure")
+CIs <- bind_rows(wmCIs, revascCIs)
+pData <- CIs %>%
+  mutate(outcome = recode(measure, ampFreeSurv2yr = "Two-year Amputation-Free Survival",
+                          mort2yr = "Two-year Survival",
+                          majorAmp2yr = "Two-year Amputation",
+                          mace2yr = "Two-year MACE")) %>%
+  mutate(y = rev(rep(1:4, 2))) %>%
+  mutate(y = if_else(group == "WM", y + 0.1, y - 0.1)) %>%
+  mutate(est = if_else(measure == "mort2yr", est, est),
+         lwr.ci = if_else(measure == "mort2yr", lwr.ci, lwr.ci),
+         upr.ci = if_else(measure == "mort2yr", upr.ci, upr.ci)) %>%
+  mutate(est = est*100, lwr.ci = lwr.ci*100, upr.ci = upr.ci*100) %>%
+  mutate(across(c("est", "lwr.ci", "upr.ci"), round)) %>%
+  mutate(label = paste0(est, "% [", lwr.ci, "%, ", upr.ci, "%]")) %>%
+  rename(pointEstimate = est)
+
+# Data comes from the report
+# outcome <- c("Two-year Amputation-Free Survival",
+#              "Two-year Survival",
+#              "Two-year Amputation",
+#              "Two-year MACE")
+# pointEstimate <- c(51, 65, 19, 17)
+# LB <- c(40, 54, 10, 8)
+# UB <- c(63, 76, 29, 25)
+# 
+# pData <- data.frame(outcome, pointEstimate, LB, UB) %>%
+#   mutate(label = paste0(pointEstimate, "% [", LB, "%, ", UB, "%]"))
 
 fig1 <- pData %>%
-  ggplot(aes(x = pointEstimate, y = outcome)) +
+  ggplot(aes(x = pointEstimate, y = y, color = group)) +
   geom_point() +
-  geom_errorbarh(aes(xmin = LB, xmax = UB),
+  geom_errorbarh(aes(xmin = lwr.ci, xmax = upr.ci),
                  height = 0) +
-  geom_text(aes(label = label), size = 2.3, vjust = -1.5) +
-  scale_y_discrete(breaks = rev(outcome), 
-                   labels = rev(outcome), 
-                   limits = rev(outcome)) +
-  scale_x_continuous(breaks = seq(from = 10, to = 70, by = 10),
-                     labels = paste0(seq(from = 10, to = 70, by = 10), "%")) +
+  geom_text(aes(label = label), size = 2.3, vjust = -1.1) +
+  # scale_y_discrete(breaks = rev(outcome), 
+  #                  labels = rev(outcome), 
+  #                  limits = rev(outcome)) +
+  scale_y_continuous(breaks = c(1, 2, 3, 4), 
+                     labels = c("Two-year MACE", "Two-year Amputation", 
+                                "Two-year Survival", 
+                                "Two-year Amputation-free Survival")) +
+  scale_color_manual(name = "Group", values = c("navyblue", "purple"),
+                     labels = c("Wound management", "Revascularization"),
+                     breaks = c("WM", "revasc")) +
+  scale_x_continuous(breaks = seq(from = 10, to = 80, by = 10),
+                     labels = paste0(seq(from = 10, to = 80, by = 10), "%")) +
   ylab("") +
   xlab("Percent") +
   theme_minimal() +
   theme(panel.grid.major.y =  element_blank(),
         panel.grid.minor.x = element_blank()) 
 
-ggsave(fig1, filename = "fig1.png", device = "png", width = 6, height = 3)
+ggsave(fig1, filename = "fig1.png", device = "png", width = 8, height = 4)
 ```
